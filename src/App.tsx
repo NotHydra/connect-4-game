@@ -429,15 +429,16 @@ export default function App(): JSX.Element {
 			let maxEval = -Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, botPlayer);
-				const evalScore = alphaBetaPruningWithTranspositionTableAlgorithm(
-					newBoard,
-					depth - 1,
-					alpha,
-					beta,
-					false,
-					botPlayer,
-					nodesRef
-				);
+				const evalScore =
+					alphaBetaPruningWithTranspositionTableAlgorithm(
+						newBoard,
+						depth - 1,
+						alpha,
+						beta,
+						false,
+						botPlayer,
+						nodesRef
+					);
 
 				maxEval = Math.max(maxEval, evalScore);
 				alpha = Math.max(alpha, evalScore);
@@ -453,15 +454,16 @@ export default function App(): JSX.Element {
 			let minEval = Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, humanPlayer);
-				const evalScore = alphaBetaPruningWithTranspositionTableAlgorithm(
-					newBoard,
-					depth - 1,
-					alpha,
-					beta,
-					true,
-					botPlayer,
-					nodesRef
-				);
+				const evalScore =
+					alphaBetaPruningWithTranspositionTableAlgorithm(
+						newBoard,
+						depth - 1,
+						alpha,
+						beta,
+						true,
+						botPlayer,
+						nodesRef
+					);
 
 				minEval = Math.min(minEval, evalScore);
 				beta = Math.min(beta, evalScore);
@@ -1070,16 +1072,6 @@ export default function App(): JSX.Element {
 								)}
 							</div>
 						</div>
-
-						{/* New Game Button */}
-						<div className="mt-4 flex justify-center">
-							<button
-								onClick={restartGame}
-								className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg font-medium transition"
-							>
-								New Game
-							</button>
-						</div>
 					</div>
 
 					{/* ============================================================== */}
@@ -1156,6 +1148,16 @@ export default function App(): JSX.Element {
 									? "🎮 Your Turn"
 									: "🤖 Bot's Turn"}
 							</div>
+						</div>
+
+						{/* New Game Card */}
+						<div className="bg-white rounded-xl shadow-lg p-6">
+							<button
+								onClick={restartGame}
+								className="p-4 rounded-lg text-center font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition w-full cursor-pointer"
+							>
+								New Game
+							</button>
 						</div>
 					</div>
 				</div>
