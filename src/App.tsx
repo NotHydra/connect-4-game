@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState, type JSX } from "react";
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
 type Cell = 0 | 1 | 2; // 0: empty, 1: player, 2: bot
 type Board = Cell[][];
 type Algorithm = "alphabeta" | "transposition" | "mtdf";
@@ -7,7 +11,6 @@ type Algorithm = "alphabeta" | "transposition" | "mtdf";
 interface GameConfig {
 	algorithm: Algorithm;
 	searchDepth: number;
-	botDelay: number;
 	playerStarts: boolean;
 }
 
@@ -18,15 +21,35 @@ interface PerformanceMetrics {
 	isThinking: boolean;
 }
 
+// ============================================================================
+// GAME CONSTANTS
+// ============================================================================
+
 const ROWS = 6;
 const COLS = 7;
 const PLAYER = 1;
 const BOT = 2;
 
-// Transposition table for caching
-const transpositionTable = new Map<string, { score: number; depth: number }>();
+// ============================================================================
+// TRANSPOSITION TABLE TYPES & INSTANCE
+// ============================================================================
+
+// Types for transposition table (caching evaluated positions)
+type TTFlag = "EXACT" | "LOWERBOUND" | "UPPERBOUND";
+interface TTEntry {
+	score: number;
+	depth: number;
+	flag: TTFlag;
+}
+
+// Global transposition table for caching positions
+const transpositionTable = new Map<string, TTEntry>();
 
 export default function App(): JSX.Element {
+	// ========================================================================
+	// STATE MANAGEMENT
+	// ========================================================================
+
 	const [gameState, setGameState] = useState<
 		"setup" | "playing" | "finished"
 	>("setup");
@@ -36,7 +59,6 @@ export default function App(): JSX.Element {
 	const [config, setConfig] = useState<GameConfig>({
 		algorithm: "alphabeta",
 		searchDepth: 5,
-		botDelay: 500,
 		playerStarts: true,
 	});
 	const [metrics, setMetrics] = useState<PerformanceMetrics>({
@@ -46,11 +68,19 @@ export default function App(): JSX.Element {
 		isThinking: false,
 	});
 
+	// ========================================================================
+	// BOARD STATE HELPERS
+	// ========================================================================
+
 	function createEmptyBoard(): Board {
 		return Array(ROWS)
 			.fill(null)
 			.map(() => Array(COLS).fill(0));
 	}
+
+	// ========================================================================
+	// BOARD VALIDATION FUNCTIONS
+	// ========================================================================
 
 	function checkWinner(board: Board): 0 | 1 | 2 {
 		// Check horizontal
@@ -116,14 +146,24 @@ export default function App(): JSX.Element {
 		return board[0][col] === 0;
 	}
 
+	function isBoardFull(board: Board): boolean {
+		return board[0].every((cell) => cell !== 0);
+	}
+
+	// ========================================================================
+	// BOARD MANIPULATION FUNCTIONS
+	// ========================================================================
+
 	function makeMove(board: Board, col: number, player: 1 | 2): Board {
 		const newBoard = board.map((row) => [...row]);
 		for (let r = ROWS - 1; r >= 0; r--) {
 			if (newBoard[r][col] === 0) {
 				newBoard[r][col] = player;
+
 				break;
 			}
 		}
+
 		return newBoard;
 	}
 
@@ -134,35 +174,45 @@ export default function App(): JSX.Element {
 				moves.push(c);
 			}
 		}
+
 		return moves;
 	}
 
-	function isBoardFull(board: Board): boolean {
-		return board[0].every((cell) => cell !== 0);
-	}
+	// ========================================================================
+	// BOARD EVALUATION & HASHING
+	// ========================================================================
 
 	function evaluateBoard(board: Board, player: 1 | 2): number {
 		const opponent = player === PLAYER ? BOT : PLAYER;
 		let score = 0;
 
-		// Check all possible windows of 4
+		// Helper function to evaluate a window of 4 cells
 		const evaluateWindow = (window: Cell[]): number => {
 			let windowScore = 0;
 			const playerCount = window.filter((c) => c === player).length;
 			const opponentCount = window.filter((c) => c === opponent).length;
 			const emptyCount = window.filter((c) => c === 0).length;
 
-			if (playerCount === 4) windowScore += 100;
-			else if (playerCount === 3 && emptyCount === 1) windowScore += 5;
-			else if (playerCount === 2 && emptyCount === 2) windowScore += 2;
+			// Player pieces scoring
+			if (playerCount === 4) {
+				windowScore += 100; // Winning position
+			} else if (playerCount === 3 && emptyCount === 1) {
+				windowScore += 5; // Almost winning
+			} else if (playerCount === 2 && emptyCount === 2) {
+				windowScore += 2; // Potential
+			}
 
-			if (opponentCount === 3 && emptyCount === 1) windowScore -= 4;
-			else if (opponentCount === 2 && emptyCount === 2) windowScore -= 1;
+			// Opponent pieces scoring (blocking)
+			if (opponentCount === 3 && emptyCount === 1) {
+				windowScore -= 4; // Block winning threat
+			} else if (opponentCount === 2 && emptyCount === 2) {
+				windowScore -= 1; // Block potential
+			}
 
 			return windowScore;
 		};
 
-		// Horizontal
+		// Evaluate all horizontal windows
 		for (let r = 0; r < ROWS; r++) {
 			for (let c = 0; c < COLS - 3; c++) {
 				score += evaluateWindow([
@@ -174,7 +224,7 @@ export default function App(): JSX.Element {
 			}
 		}
 
-		// Vertical
+		// Evaluate all vertical windows
 		for (let r = 0; r < ROWS - 3; r++) {
 			for (let c = 0; c < COLS; c++) {
 				score += evaluateWindow([
@@ -186,7 +236,7 @@ export default function App(): JSX.Element {
 			}
 		}
 
-		// Diagonal
+		// Evaluate all diagonal windows (top-left to bottom-right)
 		for (let r = 0; r < ROWS - 3; r++) {
 			for (let c = 0; c < COLS - 3; c++) {
 				score += evaluateWindow([
@@ -198,6 +248,7 @@ export default function App(): JSX.Element {
 			}
 		}
 
+		// Evaluate all diagonal windows (bottom-left to top-right)
 		for (let r = 3; r < ROWS; r++) {
 			for (let c = 0; c < COLS - 3; c++) {
 				score += evaluateWindow([
@@ -209,11 +260,12 @@ export default function App(): JSX.Element {
 			}
 		}
 
-		// Center column preference
+		// Bonus for controlling center column (strategic positioning)
 		const centerCol = Math.floor(COLS / 2);
 		const centerCount = board.filter(
 			(row) => row[centerCol] === player
 		).length;
+
 		score += centerCount * 3;
 
 		return score;
@@ -223,162 +275,379 @@ export default function App(): JSX.Element {
 		return board.map((row) => row.join("")).join("-");
 	}
 
-	// Alpha-Beta Pruning Algorithm
+	// ========================================================================
+	// MINIMAX SEARCH ALGORITHMS
+	// ========================================================================
+
+	/**
+	 * Alpha-Beta Pruning Algorithm
+	 * Uses minimax with alpha-beta pruning to efficiently search the game tree.
+	 * - Alpha: best value the maximizer can guarantee
+	 * - Beta: best value the minimizer can guarantee
+	 * Pruning reduces nodes by eliminating branches that won't affect the result.
+	 */
 	function alphaBeta(
 		board: Board,
 		depth: number,
 		alpha: number,
 		beta: number,
 		maximizing: boolean,
-		player: 1 | 2,
+		botPlayer: 1 | 2,
 		nodesRef: { count: number }
 	): number {
 		nodesRef.count++;
 
+		const humanPlayer = botPlayer === BOT ? PLAYER : BOT;
+
+		// Terminal state checks
 		const winner = checkWinner(board);
-		if (winner === player) return 10000 + depth;
-		if (winner === (player === PLAYER ? BOT : PLAYER))
-			return -10000 - depth;
-		if (depth === 0 || isBoardFull(board))
-			return evaluateBoard(board, player);
+		if (winner === botPlayer) {
+			return 10000 + depth; // Bot wins (prefer faster wins)
+		}
+
+		if (winner === humanPlayer) {
+			return -10000 - depth; // Human wins (avoid slower losses)
+		}
+
+		if (depth === 0 || isBoardFull(board)) {
+			return evaluateBoard(board, botPlayer);
+		}
 
 		const validMoves = getValidMoves(board);
 
 		if (maximizing) {
+			// Maximizing player (bot) - tries to maximize score
 			let maxEval = -Infinity;
 			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, player);
+				const newBoard = makeMove(board, col, botPlayer);
 				const evalScore = alphaBeta(
 					newBoard,
 					depth - 1,
 					alpha,
 					beta,
-					false,
-					player,
+					false, // Next turn is minimizing player
+					botPlayer,
 					nodesRef
 				);
+
 				maxEval = Math.max(maxEval, evalScore);
 				alpha = Math.max(alpha, evalScore);
-				if (beta <= alpha) break;
+
+				if (beta <= alpha) {
+					break; // Beta cutoff
+				}
 			}
 			return maxEval;
 		} else {
+			// Minimizing player (human) - tries to minimize score
 			let minEval = Infinity;
-			const opponent = player === PLAYER ? BOT : PLAYER;
 			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, opponent);
+				const newBoard = makeMove(board, col, humanPlayer);
 				const evalScore = alphaBeta(
 					newBoard,
 					depth - 1,
 					alpha,
 					beta,
-					true,
-					player,
+					true, // Next turn is maximizing player
+					botPlayer,
 					nodesRef
 				);
+
 				minEval = Math.min(minEval, evalScore);
 				beta = Math.min(beta, evalScore);
-				if (beta <= alpha) break;
+
+				if (beta <= alpha) {
+					break; // Alpha cutoff
+				}
 			}
+
 			return minEval;
 		}
 	}
 
-	// Alpha-Beta with Transposition Table
+	/**
+	 * Alpha-Beta with Transposition Table
+	 * Enhances alpha-beta pruning by caching previously evaluated positions.
+	 * - Transposition table stores: score, depth, and bound type (EXACT, LOWERBOUND, UPPERBOUND)
+	 * - Properly handles bound types for correctness in transposition lookups
+	 * - Hash includes board state and whose turn it is (maximizing vs minimizing)
+	 */
 	function alphaBetaWithTT(
 		board: Board,
 		depth: number,
 		alpha: number,
 		beta: number,
 		maximizing: boolean,
-		player: 1 | 2,
+		botPlayer: 1 | 2,
 		nodesRef: { count: number }
 	): number {
 		nodesRef.count++;
 
-		const hash = getBoardHash(board);
+		const alphaOrig = alpha;
+		const humanPlayer = botPlayer === BOT ? PLAYER : BOT;
+
+		// Transposition table lookup - include maximizing state in hash
+		// Same position can have different values depending on whose turn it is
+		const hash = getBoardHash(board) + "-" + (maximizing ? "max" : "min");
 		const cached = transpositionTable.get(hash);
 		if (cached && cached.depth >= depth) {
-			return cached.score;
+			// Use cached value based on bound type
+			if (cached.flag === "EXACT") {
+				return cached.score;
+			} else if (cached.flag === "LOWERBOUND") {
+				alpha = Math.max(alpha, cached.score);
+			} else if (cached.flag === "UPPERBOUND") {
+				beta = Math.min(beta, cached.score);
+			}
+
+			if (alpha >= beta) {
+				return cached.score;
+			}
 		}
 
+		// Terminal state checks
 		const winner = checkWinner(board);
-		if (winner === player) return 10000 + depth;
-		if (winner === (player === PLAYER ? BOT : PLAYER))
+		if (winner === botPlayer) {
+			return 10000 + depth;
+		}
+
+		if (winner === humanPlayer) {
 			return -10000 - depth;
-		if (depth === 0 || isBoardFull(board))
-			return evaluateBoard(board, player);
+		}
+
+		if (depth === 0 || isBoardFull(board)) {
+			return evaluateBoard(board, botPlayer);
+		}
 
 		const validMoves = getValidMoves(board);
-
+		// Save original beta for flag determination (beta may be modified during search)
+		const betaOrig = beta;
 		let score: number;
+
 		if (maximizing) {
+			// Maximizing player (bot)
 			let maxEval = -Infinity;
 			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, player);
+				const newBoard = makeMove(board, col, botPlayer);
 				const evalScore = alphaBetaWithTT(
 					newBoard,
 					depth - 1,
 					alpha,
 					beta,
 					false,
-					player,
+					botPlayer,
 					nodesRef
 				);
+
 				maxEval = Math.max(maxEval, evalScore);
 				alpha = Math.max(alpha, evalScore);
-				if (beta <= alpha) break;
+
+				if (beta <= alpha) {
+					break; // Beta cutoff
+				}
 			}
+
 			score = maxEval;
 		} else {
+			// Minimizing player (human)
 			let minEval = Infinity;
-			const opponent = player === PLAYER ? BOT : PLAYER;
 			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, opponent);
+				const newBoard = makeMove(board, col, humanPlayer);
 				const evalScore = alphaBetaWithTT(
 					newBoard,
 					depth - 1,
 					alpha,
 					beta,
 					true,
-					player,
+					botPlayer,
 					nodesRef
 				);
+
 				minEval = Math.min(minEval, evalScore);
 				beta = Math.min(beta, evalScore);
-				if (beta <= alpha) break;
+
+				if (beta <= alpha) {
+					break; // Alpha cutoff
+				}
 			}
+
 			score = minEval;
 		}
 
-		transpositionTable.set(hash, { score, depth });
+		// Store in transposition table with appropriate flag
+		// - UPPERBOUND: score is at most this value (failed low)
+		// - LOWERBOUND: score is at least this value (failed high)
+		// - EXACT: score is the exact minimax value
+		let flag: TTFlag;
+		if (score <= alphaOrig) {
+			flag = "UPPERBOUND";
+		} else if (score >= betaOrig) {
+			flag = "LOWERBOUND";
+		} else {
+			flag = "EXACT";
+		}
+
+		transpositionTable.set(hash, { score, depth, flag });
+
 		return score;
 	}
 
-	// MTD(f) Algorithm
+	/**
+	 * Alpha-Beta Memory for MTD(f)
+	 * A negamax formulation with transposition table bounds.
+	 * Stores bounds for null-window searches used by MTD(f).
+	 * Includes current player in hash to distinguish between players.
+	 */
+	function alphaBetaMemory(
+		board: Board,
+		depth: number,
+		alpha: number,
+		beta: number,
+		currentPlayer: 1 | 2,
+		botPlayer: 1 | 2,
+		nodesRef: { count: number }
+	): number {
+		nodesRef.count++;
+
+		const alphaOrig = alpha;
+		const hash = getBoardHash(board) + "-" + currentPlayer; // Include current player in hash
+		const cached = transpositionTable.get(hash);
+
+		// Transposition table lookup with proper bound handling
+		if (cached && cached.depth >= depth) {
+			if (cached.flag === "EXACT") {
+				return cached.score;
+			} else if (cached.flag === "LOWERBOUND") {
+				alpha = Math.max(alpha, cached.score);
+			} else if (cached.flag === "UPPERBOUND") {
+				beta = Math.min(beta, cached.score);
+			}
+
+			if (alpha >= beta) {
+				return cached.score;
+			}
+		}
+
+		const opponent = currentPlayer === PLAYER ? BOT : PLAYER;
+
+		// Terminal state checks (from perspective of botPlayer)
+		const winner = checkWinner(board);
+		if (winner === botPlayer) {
+			return 10000 + depth;
+		}
+
+		if (winner !== 0 && winner !== botPlayer) {
+			return -10000 - depth;
+		}
+
+		if (depth === 0 || isBoardFull(board)) {
+			return evaluateBoard(board, botPlayer);
+		}
+
+		const validMoves = getValidMoves(board);
+		// Save original beta for flag determination
+		const betaOrig = beta;
+		let bestScore: number;
+
+		if (currentPlayer === botPlayer) {
+			// Maximizing for bot
+			bestScore = -Infinity;
+			for (const col of validMoves) {
+				const newBoard = makeMove(board, col, currentPlayer);
+				const score = alphaBetaMemory(
+					newBoard,
+					depth - 1,
+					alpha,
+					beta,
+					opponent,
+					botPlayer,
+					nodesRef
+				);
+
+				bestScore = Math.max(bestScore, score);
+				alpha = Math.max(alpha, bestScore);
+
+				if (alpha >= beta) {
+					break;
+				}
+			}
+		} else {
+			// Minimizing for opponent
+			bestScore = Infinity;
+			for (const col of validMoves) {
+				const newBoard = makeMove(board, col, currentPlayer);
+				const score = alphaBetaMemory(
+					newBoard,
+					depth - 1,
+					alpha,
+					beta,
+					opponent,
+					botPlayer,
+					nodesRef
+				);
+
+				bestScore = Math.min(bestScore, score);
+				beta = Math.min(beta, bestScore);
+
+				if (alpha >= beta) {
+					break;
+				}
+			}
+		}
+
+		// Store in transposition table with appropriate bound flag
+		// - UPPERBOUND: score is at most this value (failed low)
+		// - LOWERBOUND: score is at least this value (failed high)
+		// - EXACT: score is the exact minimax value
+		let flag: TTFlag;
+		if (bestScore <= alphaOrig) {
+			flag = "UPPERBOUND";
+		} else if (bestScore >= betaOrig) {
+			flag = "LOWERBOUND";
+		} else {
+			flag = "EXACT";
+		}
+
+		transpositionTable.set(hash, { score: bestScore, depth, flag });
+
+		return bestScore;
+	}
+
+	/**
+	 * MTD(f) Algorithm - Memory-enhanced Test Driver with first guess
+	 * Uses null-window searches centered around a guess to converge on the true minimax value.
+	 * More efficient than standard alpha-beta when combined with transposition tables.
+	 * Iteratively narrows the search window until the exact value is found.
+	 */
 	function mtdf(
 		board: Board,
 		depth: number,
 		firstGuess: number,
-		player: 1 | 2,
+		currentPlayer: 1 | 2,
+		botPlayer: 1 | 2,
 		nodesRef: { count: number }
 	): number {
 		let g = firstGuess;
-		let upperBound = Infinity;
 		let lowerBound = -Infinity;
+		let upperBound = Infinity;
 
+		// Iteratively narrow the window until we converge on the exact value
 		while (lowerBound < upperBound) {
+			// Use a null-window (zero-width window) centered around our guess
 			const beta = Math.max(g, lowerBound + 1);
-			g = alphaBetaWithTT(
+
+			// Perform a null-window search
+			g = alphaBetaMemory(
 				board,
 				depth,
 				beta - 1,
 				beta,
-				true,
-				player,
+				currentPlayer,
+				botPlayer,
 				nodesRef
 			);
 
+			// Update bounds based on result
 			if (g < beta) {
 				upperBound = g;
 			} else {
@@ -399,29 +668,56 @@ export default function App(): JSX.Element {
 		let bestScore = -Infinity;
 		const nodesRef = { count: 0 };
 
+		// ====================================================================
+		// MOVE SEARCH BY ALGORITHM TYPE
+		// ====================================================================
+
 		if (algorithm === "mtdf") {
-			const scores: number[] = [];
-			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, BOT);
-				const score = mtdf(newBoard, depth - 1, 0, BOT, nodesRef);
-				scores.push(score);
-				if (score > bestScore) {
-					bestScore = score;
-					bestCol = col;
+			// MTD(f) with iterative deepening
+			// Start with a guess of 0 and refine through iterative deepening
+			let firstGuess = 0;
+
+			for (let d = 1; d <= depth; d++) {
+				let tempBestScore = -Infinity;
+				let tempBestCol = validMoves[0];
+
+				for (const col of validMoves) {
+					const newBoard = makeMove(board, col, BOT);
+					// After BOT moves, it's PLAYER's turn to move
+					const score = mtdf(
+						newBoard,
+						d - 1,
+						firstGuess,
+						PLAYER, // Current player after this move
+						BOT, // We're evaluating for BOT
+						nodesRef
+					);
+
+					if (score > tempBestScore) {
+						tempBestScore = score;
+						tempBestCol = col;
+					}
 				}
+
+				bestScore = tempBestScore;
+				bestCol = tempBestCol;
+				firstGuess = tempBestScore; // Use this depth's result as next guess
 			}
 		} else {
+			// Alpha-Beta or Alpha-Beta with Transposition Table
 			const useTransposition = algorithm === "transposition";
+
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, BOT);
+				// After BOT moves, it's PLAYER's turn (minimizing)
 				const score = useTransposition
 					? alphaBetaWithTT(
 							newBoard,
 							depth - 1,
 							-Infinity,
 							Infinity,
-							false,
-							BOT,
+							false, // PLAYER is minimizing
+							BOT, // We're evaluating for BOT
 							nodesRef
 					  )
 					: alphaBeta(
@@ -429,8 +725,8 @@ export default function App(): JSX.Element {
 							depth - 1,
 							-Infinity,
 							Infinity,
-							false,
-							BOT,
+							false, // PLAYER is minimizing
+							BOT, // We're evaluating for BOT
 							nodesRef
 					  );
 
@@ -441,8 +737,16 @@ export default function App(): JSX.Element {
 			}
 		}
 
-		return { col: bestCol, evaluation: bestScore, nodes: nodesRef.count };
+		return {
+			col: bestCol,
+			evaluation: bestScore,
+			nodes: nodesRef.count,
+		};
 	}
+
+	// ========================================================================
+	// GAME EVENT HANDLERS
+	// ========================================================================
 
 	const handlePlayerMove = (col: number) => {
 		if (
@@ -460,11 +764,13 @@ export default function App(): JSX.Element {
 		if (winner) {
 			setWinner(winner);
 			setGameState("finished");
+
 			return;
 		}
 
 		if (isBoardFull(newBoard)) {
 			setGameState("finished");
+
 			return;
 		}
 
@@ -489,9 +795,6 @@ export default function App(): JSX.Element {
 
 		const thinkTime = endTime - startTime;
 
-		// Apply configured delay
-		const remainingDelay = Math.max(0, config.botDelay - thinkTime);
-
 		setMetrics({
 			nodesSearched: nodes,
 			timeMs: thinkTime,
@@ -499,32 +802,43 @@ export default function App(): JSX.Element {
 			isThinking: true,
 		});
 
-		await new Promise((resolve) => setTimeout(resolve, remainingDelay));
-
 		const newBoard = makeMove(board, col, BOT);
 		setBoard(newBoard);
-		setMetrics((prev) => ({ ...prev, isThinking: false }));
+		setMetrics((prev) => ({
+			...prev,
+			isThinking: false,
+		}));
 
 		const winner = checkWinner(newBoard);
 		if (winner) {
 			setWinner(winner);
 			setGameState("finished");
+
 			return;
 		}
 
 		if (isBoardFull(newBoard)) {
 			setGameState("finished");
+
 			return;
 		}
 
 		setCurrentPlayer(PLAYER);
 	}, [currentPlayer, gameState, board, config]);
 
+	// ========================================================================
+	// GAME LIFECYCLE EFFECTS
+	// ========================================================================
+
 	useEffect(() => {
 		if (currentPlayer === BOT && gameState === "playing") {
 			makeBotMove();
 		}
 	}, [currentPlayer, gameState, makeBotMove]);
+
+	// ========================================================================
+	// GAME STATE INITIALIZATION
+	// ========================================================================
 
 	const startGame = () => {
 		const newBoard = createEmptyBoard();
@@ -538,6 +852,7 @@ export default function App(): JSX.Element {
 			evaluation: 0,
 			isThinking: false,
 		});
+
 		transpositionTable.clear();
 	};
 
@@ -551,22 +866,29 @@ export default function App(): JSX.Element {
 			evaluation: 0,
 			isThinking: false,
 		});
+
 		transpositionTable.clear();
 	};
 
+	// ========================================================================
+	// RENDER: SETUP SCREEN
+	// ========================================================================
+
 	if (gameState === "setup") {
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-8">
+			<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 flex items-center justify-center p-8">
 				<div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
 					<h1 className="text-3xl font-bold text-slate-800 mb-8 text-center">
 						Connect 4 AI
 					</h1>
 
 					<div className="space-y-6">
+						{/* Algorithm Selection */}
 						<div>
 							<label className="block text-sm font-medium text-slate-700 mb-2">
 								AI Algorithm
 							</label>
+
 							<select
 								value={config.algorithm}
 								onChange={(e) =>
@@ -580,17 +902,21 @@ export default function App(): JSX.Element {
 								<option value="alphabeta">
 									Alpha-Beta Pruning
 								</option>
+
 								<option value="transposition">
 									Transposition Table
 								</option>
+
 								<option value="mtdf">MTD(f)</option>
 							</select>
 						</div>
 
+						{/* Search Depth Selection */}
 						<div>
 							<label className="block text-sm font-medium text-slate-700 mb-2">
 								Search Depth: {config.searchDepth}
 							</label>
+
 							<input
 								type="range"
 								min="1"
@@ -604,40 +930,20 @@ export default function App(): JSX.Element {
 								}
 								className="w-full"
 							/>
+
 							<div className="flex justify-between text-xs text-slate-500 mt-1">
 								<span>1 (Easy)</span>
+
 								<span>10 (Hard)</span>
 							</div>
 						</div>
 
-						<div>
-							<label className="block text-sm font-medium text-slate-700 mb-2">
-								Bot Delay: {config.botDelay}ms
-							</label>
-							<input
-								type="range"
-								min="0"
-								max="1000"
-								step="100"
-								value={config.botDelay}
-								onChange={(e) =>
-									setConfig({
-										...config,
-										botDelay: Number(e.target.value),
-									})
-								}
-								className="w-full"
-							/>
-							<div className="flex justify-between text-xs text-slate-500 mt-1">
-								<span>0ms (Instant)</span>
-								<span>1000ms</span>
-							</div>
-						</div>
-
+						{/* Player Start Selection */}
 						<div>
 							<label className="block text-sm font-medium text-slate-700 mb-2">
 								Who Starts First?
 							</label>
+
 							<div className="flex gap-4">
 								<button
 									onClick={() =>
@@ -654,6 +960,7 @@ export default function App(): JSX.Element {
 								>
 									Player
 								</button>
+
 								<button
 									onClick={() =>
 										setConfig({
@@ -672,9 +979,10 @@ export default function App(): JSX.Element {
 							</div>
 						</div>
 
+						{/* Start Button */}
 						<button
 							onClick={startGame}
-							className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
+							className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
 						>
 							Start Game
 						</button>
@@ -684,13 +992,19 @@ export default function App(): JSX.Element {
 		);
 	}
 
+	// ========================================================================
+	// RENDER: GAME PLAYING SCREEN
+	// ========================================================================
+
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
+		<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 p-8">
 			<div className="max-w-6xl mx-auto">
+				{/* Header Section */}
 				<div className="text-center mb-6">
 					<h1 className="text-4xl font-bold text-white mb-2">
 						Connect 4 AI
 					</h1>
+
 					<p className="text-slate-300">
 						Algorithm:{" "}
 						<span className="font-semibold">
@@ -704,7 +1018,7 @@ export default function App(): JSX.Element {
 					</p>
 				</div>
 
-				{/* Winner Banner */}
+				{/* Game Status Messages */}
 				{winner !== 0 && (
 					<div
 						className={`mb-6 p-4 rounded-lg text-center font-bold text-lg ${
@@ -724,7 +1038,9 @@ export default function App(): JSX.Element {
 				)}
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-					{/* Game Board */}
+					{/* ============================================================== */}
+					{/* LEFT: GAME BOARD SECTION */}
+					{/* ============================================================== */}
 					<div className="lg:col-span-2">
 						<div className="bg-blue-600 rounded-2xl p-6 shadow-2xl">
 							<div className="grid grid-cols-7 gap-2">
@@ -755,6 +1071,7 @@ export default function App(): JSX.Element {
 							</div>
 						</div>
 
+						{/* New Game Button */}
 						<div className="mt-4 flex justify-center">
 							<button
 								onClick={restartGame}
@@ -765,17 +1082,22 @@ export default function App(): JSX.Element {
 						</div>
 					</div>
 
-					{/* Performance Metrics */}
+					{/* ============================================================== */}
+					{/* RIGHT: PERFORMANCE METRICS & TURN INDICATOR */}
+					{/* ============================================================== */}
 					<div className="space-y-4">
+						{/* Performance Metrics Card */}
 						<div className="bg-white rounded-xl shadow-lg p-6">
 							<h2 className="text-xl font-bold text-slate-800 mb-4">
 								Performance Metrics
 							</h2>
 
+							{/* Bot Thinking Indicator */}
 							{metrics.isThinking && (
 								<div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
 									<div className="flex items-center gap-2">
 										<div className="animate-spin h-4 w-4 border-2 border-yellow-500 border-t-transparent rounded-full" />
+
 										<span className="text-sm font-medium text-yellow-700">
 											Bot is thinking...
 										</span>
@@ -783,11 +1105,13 @@ export default function App(): JSX.Element {
 								</div>
 							)}
 
+							{/* Metrics Display */}
 							<div className="space-y-3">
 								<div className="p-3 bg-slate-50 rounded-lg">
 									<div className="text-sm text-slate-600">
 										Nodes Searched
 									</div>
+
 									<div className="text-2xl font-bold text-slate-800">
 										{metrics.nodesSearched.toLocaleString()}
 									</div>
@@ -797,6 +1121,7 @@ export default function App(): JSX.Element {
 									<div className="text-sm text-slate-600">
 										Time Taken
 									</div>
+
 									<div className="text-2xl font-bold text-slate-800">
 										{metrics.timeMs.toFixed(0)}ms
 									</div>
@@ -806,6 +1131,7 @@ export default function App(): JSX.Element {
 									<div className="text-sm text-slate-600">
 										Evaluation Score
 									</div>
+
 									<div className="text-2xl font-bold text-slate-800">
 										{metrics.evaluation}
 									</div>
@@ -813,10 +1139,12 @@ export default function App(): JSX.Element {
 							</div>
 						</div>
 
+						{/* Current Turn Card */}
 						<div className="bg-white rounded-xl shadow-lg p-6">
 							<h2 className="text-xl font-bold text-slate-800 mb-2">
 								Current Turn
 							</h2>
+
 							<div
 								className={`p-4 rounded-lg text-center font-semibold ${
 									currentPlayer === PLAYER
