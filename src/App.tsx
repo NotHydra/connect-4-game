@@ -286,7 +286,7 @@ export default function App(): JSX.Element {
 	 * - Beta: best value the minimizer can guarantee
 	 * Pruning reduces nodes by eliminating branches that won't affect the result.
 	 */
-	function alphaBeta(
+	function alphaBetaPruningAlgorithm(
 		board: Board,
 		depth: number,
 		alpha: number,
@@ -320,7 +320,7 @@ export default function App(): JSX.Element {
 			let maxEval = -Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, botPlayer);
-				const evalScore = alphaBeta(
+				const evalScore = alphaBetaPruningAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -343,7 +343,7 @@ export default function App(): JSX.Element {
 			let minEval = Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, humanPlayer);
-				const evalScore = alphaBeta(
+				const evalScore = alphaBetaPruningAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -372,7 +372,7 @@ export default function App(): JSX.Element {
 	 * - Properly handles bound types for correctness in transposition lookups
 	 * - Hash includes board state and whose turn it is (maximizing vs minimizing)
 	 */
-	function alphaBetaWithTT(
+	function alphaBetaPruningWithTranspositionTableAlgorithm(
 		board: Board,
 		depth: number,
 		alpha: number,
@@ -429,7 +429,7 @@ export default function App(): JSX.Element {
 			let maxEval = -Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, botPlayer);
-				const evalScore = alphaBetaWithTT(
+				const evalScore = alphaBetaPruningWithTranspositionTableAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -453,7 +453,7 @@ export default function App(): JSX.Element {
 			let minEval = Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, humanPlayer);
-				const evalScore = alphaBetaWithTT(
+				const evalScore = alphaBetaPruningWithTranspositionTableAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -498,7 +498,7 @@ export default function App(): JSX.Element {
 	 * Stores bounds for null-window searches used by MTD(f).
 	 * Includes current player in hash to distinguish between players.
 	 */
-	function alphaBetaMemory(
+	function alphaBetaPruningWithMemoryAlgorithm(
 		board: Board,
 		depth: number,
 		alpha: number,
@@ -554,7 +554,7 @@ export default function App(): JSX.Element {
 			bestScore = -Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, currentPlayer);
-				const score = alphaBetaMemory(
+				const score = alphaBetaPruningWithMemoryAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -576,7 +576,7 @@ export default function App(): JSX.Element {
 			bestScore = Infinity;
 			for (const col of validMoves) {
 				const newBoard = makeMove(board, col, currentPlayer);
-				const score = alphaBetaMemory(
+				const score = alphaBetaPruningWithMemoryAlgorithm(
 					newBoard,
 					depth - 1,
 					alpha,
@@ -619,7 +619,7 @@ export default function App(): JSX.Element {
 	 * More efficient than standard alpha-beta when combined with transposition tables.
 	 * Iteratively narrows the search window until the exact value is found.
 	 */
-	function mtdf(
+	function mtdfAlgorithm(
 		board: Board,
 		depth: number,
 		firstGuess: number,
@@ -637,7 +637,7 @@ export default function App(): JSX.Element {
 			const beta = Math.max(g, lowerBound + 1);
 
 			// Perform a null-window search
-			g = alphaBetaMemory(
+			g = alphaBetaPruningWithMemoryAlgorithm(
 				board,
 				depth,
 				beta - 1,
@@ -684,7 +684,7 @@ export default function App(): JSX.Element {
 				for (const col of validMoves) {
 					const newBoard = makeMove(board, col, BOT);
 					// After BOT moves, it's PLAYER's turn to move
-					const score = mtdf(
+					const score = mtdfAlgorithm(
 						newBoard,
 						d - 1,
 						firstGuess,
@@ -711,7 +711,7 @@ export default function App(): JSX.Element {
 				const newBoard = makeMove(board, col, BOT);
 				// After BOT moves, it's PLAYER's turn (minimizing)
 				const score = useTransposition
-					? alphaBetaWithTT(
+					? alphaBetaPruningWithTranspositionTableAlgorithm(
 							newBoard,
 							depth - 1,
 							-Infinity,
@@ -720,7 +720,7 @@ export default function App(): JSX.Element {
 							BOT, // We're evaluating for BOT
 							nodesRef
 					  )
-					: alphaBeta(
+					: alphaBetaPruningAlgorithm(
 							newBoard,
 							depth - 1,
 							-Infinity,
