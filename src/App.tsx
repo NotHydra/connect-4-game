@@ -878,116 +878,185 @@ export default function App(): JSX.Element {
 
 	if (gameState === "setup") {
 		return (
-			<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 flex items-center justify-center p-8">
-				<div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-					<h1 className="text-3xl font-bold text-slate-800 mb-8 text-center">
-						Connect 4 AI
-					</h1>
+			<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4 sm:p-8">
+				<div className="bg-white rounded-2xl shadow-2xl px-4 py-8 sm:p-8 max-w-5xl w-full">
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+						{/* Left Column: Game Configuration */}
+						<div className="space-y-5">
+							<h2 className="text-2xl font-bold text-slate-800 mb-6">
+								Connect 4 AI Game
+							</h2>
 
-					<div className="space-y-6">
-						{/* Algorithm Selection */}
-						<div>
-							<label className="block text-sm font-medium text-slate-700 mb-2">
-								AI Algorithm
-							</label>
+							{/* Algorithm Selection */}
+							<div>
+								<label className="block text-sm font-medium text-slate-700 mb-2">
+									AI Algorithm
+								</label>
 
-							<select
-								value={config.algorithm}
-								onChange={(e) =>
-									setConfig({
-										...config,
-										algorithm: e.target.value as Algorithm,
-									})
-								}
-								className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+								<select
+									value={config.algorithm}
+									onChange={(e) =>
+										setConfig({
+											...config,
+											algorithm: e.target
+												.value as Algorithm,
+										})
+									}
+									className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+								>
+									<option value="alphabeta">
+										Alpha-Beta Pruning
+									</option>
+
+									<option value="transposition">
+										Transposition Table
+									</option>
+
+									<option value="mtdf">MTD(f)</option>
+								</select>
+							</div>
+
+							{/* Search Depth Selection */}
+							<div>
+								<label className="block text-sm font-medium text-slate-700 mb-2">
+									Search Depth: {config.searchDepth}
+								</label>
+
+								<input
+									type="range"
+									min="1"
+									max="10"
+									value={config.searchDepth}
+									onChange={(e) =>
+										setConfig({
+											...config,
+											searchDepth: Number(e.target.value),
+										})
+									}
+									className="w-full"
+								/>
+
+								<div className="flex justify-between text-xs text-slate-500 mt-1">
+									<span>1 (Easy)</span>
+
+									<span>10 (Hard)</span>
+								</div>
+							</div>
+
+							{/* Player Start Selection */}
+							<div>
+								<label className="block text-sm font-medium text-slate-700 mb-2">
+									Who Starts First?
+								</label>
+
+								<div className="flex gap-4">
+									<button
+										onClick={() =>
+											setConfig({
+												...config,
+												playerStarts: true,
+											})
+										}
+										className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+											config.playerStarts
+												? "bg-blue-500 text-white"
+												: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+										}`}
+									>
+										Player
+									</button>
+
+									<button
+										onClick={() =>
+											setConfig({
+												...config,
+												playerStarts: false,
+											})
+										}
+										className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+											!config.playerStarts
+												? "bg-red-500 text-white"
+												: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+										}`}
+									>
+										Bot
+									</button>
+								</div>
+							</div>
+
+							{/* Start Button */}
+							<button
+								onClick={startGame}
+								className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
 							>
-								<option value="alphabeta">
-									Alpha-Beta Pruning
-								</option>
-
-								<option value="transposition">
-									Transposition Table
-								</option>
-
-								<option value="mtdf">MTD(f)</option>
-							</select>
+								Start Game
+							</button>
 						</div>
 
-						{/* Search Depth Selection */}
-						<div>
-							<label className="block text-sm font-medium text-slate-700 mb-2">
-								Search Depth: {config.searchDepth}
-							</label>
+						{/* Right Column: Project Information */}
+						<div className="space-y-5 border-slate-200 border-t-2 sm:border-t-0 sm:border-l-2 pt-8 sm:pt-0 sm:pl-8">
+							<h2 className="text-2xl font-bold text-slate-800 mb-6">
+								Project Information
+							</h2>
 
-							<input
-								type="range"
-								min="1"
-								max="10"
-								value={config.searchDepth}
-								onChange={(e) =>
-									setConfig({
-										...config,
-										searchDepth: Number(e.target.value),
-									})
-								}
-								className="w-full"
-							/>
+							{/* Title */}
+							<div>
+								<h3 className="font-bold text-slate-800 text-sm">
+									Title
+								</h3>
 
-							<div className="flex justify-between text-xs text-slate-500 mt-1">
-								<span>1 (Easy)</span>
+								<p className="text-slate-600 text-sm leading-relaxed text-justify">
+									Implementation and Comparative Study of
+									Alpha-Beta Pruning, Transposition Tables,
+									and MTD(F) for Minimax Algorithm in a
+									Two-Player Connect Four Game
+								</p>
+							</div>
 
-								<span>10 (Hard)</span>
+							{/* Course */}
+							<div>
+								<h3 className="font-bold text-slate-800 text-sm">
+									Course
+								</h3>
+
+								<p className="text-slate-600 text-sm">
+									Introduction to Artificial Intelligence -
+									Class A
+								</p>
+							</div>
+
+							{/* Lecturer */}
+							<div>
+								<h3 className="font-bold text-slate-800 text-sm">
+									Lecturer
+								</h3>
+
+								<p className="text-slate-600 text-sm">
+									Bima Prihasto, S.Si., M.Si., Ph.D.
+								</p>
+							</div>
+
+							{/* Members */}
+							<div>
+								<h3 className="font-bold text-slate-800 text-sm">
+									Group 8 Members
+								</h3>
+
+								<ul className="text-slate-600 ml-4 space-y-1 text-sm list-disc">
+									<li>
+										11231001 - Abdullah Adiwarman Wildan
+									</li>
+
+									<li>11231015 - Bagus Nur Ardiansyah</li>
+
+									<li>11231089 - Rizky Irswanda Ramadhana</li>
+
+									<li>11231092 - Zakaria Fattawari</li>
+
+									<li>11241041 - Lisa Sapitri</li>
+								</ul>
 							</div>
 						</div>
-
-						{/* Player Start Selection */}
-						<div>
-							<label className="block text-sm font-medium text-slate-700 mb-2">
-								Who Starts First?
-							</label>
-
-							<div className="flex gap-4">
-								<button
-									onClick={() =>
-										setConfig({
-											...config,
-											playerStarts: true,
-										})
-									}
-									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-										config.playerStarts
-											? "bg-blue-500 text-white"
-											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
-									}`}
-								>
-									Player
-								</button>
-
-								<button
-									onClick={() =>
-										setConfig({
-											...config,
-											playerStarts: false,
-										})
-									}
-									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-										!config.playerStarts
-											? "bg-red-500 text-white"
-											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
-									}`}
-								>
-									Bot
-								</button>
-							</div>
-						</div>
-
-						{/* Start Button */}
-						<button
-							onClick={startGame}
-							className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
-						>
-							Start Game
-						</button>
 					</div>
 				</div>
 			</div>
@@ -999,12 +1068,12 @@ export default function App(): JSX.Element {
 	// ========================================================================
 
 	return (
-		<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 p-8">
+		<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 p-4 sm:p-8">
 			<div className="max-w-6xl mx-auto">
 				{/* Header Section */}
 				<div className="text-center mb-6">
 					<h1 className="text-4xl font-bold text-white mb-2">
-						Connect 4 AI
+						Connect 4
 					</h1>
 
 					<p className="text-slate-300">
@@ -1015,8 +1084,14 @@ export default function App(): JSX.Element {
 								: config.algorithm === "transposition"
 								? "Transposition Table"
 								: "MTD(f)"}
-						</span>{" "}
-						| Depth: {config.searchDepth}
+						</span>
+					</p>
+
+					<p className="text-slate-300">
+						Depth:{" "}
+						<span className="font-semibold">
+							{config.searchDepth}
+						</span>
 					</p>
 				</div>
 
