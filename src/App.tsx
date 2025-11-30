@@ -1056,6 +1056,18 @@ export default function App(): JSX.Element {
 									<li>11241041 - Lisa Sapitri</li>
 								</ul>
 							</div>
+
+							{/* GitHub Repository */}
+							<div>
+								<a
+									href="https://github.com/NotHydra/connect-4-game"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-sm"
+								>
+									<span>🔗 GitHub Repository</span>
+								</a>
+							</div>
 						</div>
 					</div>
 				</div>
