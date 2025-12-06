@@ -987,7 +987,7 @@ if (gameState === "setup") {
 									}
 									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
 										config.mode === "bot-vs-bot"
-											? "bg-purple-500 text-white"
+											? "bg-blue-500 text-white"
 											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
 									}`}
 								>
@@ -1207,7 +1207,7 @@ if (gameState === "setup") {
 								Implementation and Comparative Study of
 								Alpha-Beta Pruning, Transposition Tables, and
 								MTD(F) for Minimax Algorithm in a Two-Player
-								Connect Four Game
+								Connect Four Game.
 							</p>
 						</div>
 
