@@ -7,12 +7,23 @@ import { useCallback, useEffect, useState, type JSX } from "react";
 type Cell = 0 | 1 | 2; // 0: empty, 1: player, 2: bot
 type Board = Cell[][];
 type Algorithm = "alphabeta" | "transposition" | "mtdf";
+type GameMode = "human-vs-bot" | "bot-vs-bot";
 
 interface GameConfig {
-	algorithm: Algorithm;
-	searchDepth: number;
-	playerStarts: boolean;
+    mode: GameMode;
+
+    // Human vs Bot
+    algorithm: Algorithm;
+    searchDepth: number;
+    playerStarts: boolean;
+
+    // Bot vs Bot
+    bot1Algorithm: Algorithm;
+    bot2Algorithm: Algorithm;
+    bot1Depth: number;
+    bot2Depth: number;
 }
+
 
 interface PerformanceMetrics {
 	nodesSearched: number;
@@ -57,10 +68,17 @@ export default function App(): JSX.Element {
 	const [currentPlayer, setCurrentPlayer] = useState<1 | 2>(PLAYER);
 	const [winner, setWinner] = useState<0 | 1 | 2>(0);
 	const [config, setConfig] = useState<GameConfig>({
+		mode: "human-vs-bot",
 		algorithm: "alphabeta",
 		searchDepth: 5,
 		playerStarts: true,
+		bot1Algorithm: "alphabeta",
+		bot2Algorithm: "alphabeta",
+		bot1Depth: 5,
+		bot2Depth: 5,
 	});
+
+
 	const [metrics, setMetrics] = useState<PerformanceMetrics>({
 		nodesSearched: 0,
 		timeMs: 0,
@@ -663,20 +681,22 @@ export default function App(): JSX.Element {
 	function findBestMove(
 		board: Board,
 		algorithm: Algorithm,
-		depth: number
+		depth: number,
+		botPlayer: 1 | 2
 	): { col: number; evaluation: number; nodes: number } {
 		const validMoves = getValidMoves(board);
 		let bestCol = validMoves[0];
 		let bestScore = -Infinity;
 		const nodesRef = { count: 0 };
 
-		// ====================================================================
+		const opponent = botPlayer === PLAYER ? BOT : PLAYER;
+
+		// ========================================================================
 		// MOVE SEARCH BY ALGORITHM TYPE
-		// ====================================================================
+		// ========================================================================
 
 		if (algorithm === "mtdf") {
 			// MTD(f) with iterative deepening
-			// Start with a guess of 0 and refine through iterative deepening
 			let firstGuess = 0;
 
 			for (let d = 1; d <= depth; d++) {
@@ -684,14 +704,13 @@ export default function App(): JSX.Element {
 				let tempBestCol = validMoves[0];
 
 				for (const col of validMoves) {
-					const newBoard = makeMove(board, col, BOT);
-					// After BOT moves, it's PLAYER's turn to move
+					const newBoard = makeMove(board, col, botPlayer);
 					const score = mtdfAlgorithm(
 						newBoard,
 						d - 1,
 						firstGuess,
-						PLAYER, // Current player after this move
-						BOT, // We're evaluating for BOT
+						opponent,   // pemain berikutnya
+						botPlayer,  // evaluasi dari sisi botPlayer
 						nodesRef
 					);
 
@@ -703,34 +722,33 @@ export default function App(): JSX.Element {
 
 				bestScore = tempBestScore;
 				bestCol = tempBestCol;
-				firstGuess = tempBestScore; // Use this depth's result as next guess
+				firstGuess = tempBestScore; // gunakan hasil depth ini sebagai tebakan berikutnya
 			}
 		} else {
-			// Alpha-Beta or Alpha-Beta with Transposition Table
+			// Alpha-Beta atau Alpha-Beta + Transposition Table
 			const useTransposition = algorithm === "transposition";
 
 			for (const col of validMoves) {
-				const newBoard = makeMove(board, col, BOT);
-				// After BOT moves, it's PLAYER's turn (minimizing)
+				const newBoard = makeMove(board, col, botPlayer);
 				const score = useTransposition
 					? alphaBetaPruningWithTranspositionTableAlgorithm(
-							newBoard,
-							depth - 1,
-							-Infinity,
-							Infinity,
-							false, // PLAYER is minimizing
-							BOT, // We're evaluating for BOT
-							nodesRef
-					  )
+						newBoard,
+						depth - 1,
+						-Infinity,
+						Infinity,
+						false,      // lawan meminimalkan
+						botPlayer,  // evaluasi dari sisi botPlayer
+						nodesRef
+					)
 					: alphaBetaPruningAlgorithm(
-							newBoard,
-							depth - 1,
-							-Infinity,
-							Infinity,
-							false, // PLAYER is minimizing
-							BOT, // We're evaluating for BOT
-							nodesRef
-					  );
+						newBoard,
+						depth - 1,
+						-Infinity,
+						Infinity,
+						false,
+						botPlayer,
+						nodesRef
+					);
 
 				if (score > bestScore) {
 					bestScore = score;
@@ -746,6 +764,7 @@ export default function App(): JSX.Element {
 		};
 	}
 
+
 	// ========================================================================
 	// GAME EVENT HANDLERS
 	// ========================================================================
@@ -753,6 +772,7 @@ export default function App(): JSX.Element {
 	const handlePlayerMove = (col: number) => {
 		if (
 			gameState !== "playing" ||
+			config.mode === "bot-vs-bot" ||   // NEW: tidak boleh klik di mode ini
 			currentPlayer !== PLAYER ||
 			!isValidMove(board, col)
 		) {
@@ -779,64 +799,118 @@ export default function App(): JSX.Element {
 		setCurrentPlayer(BOT);
 	};
 
-	const makeBotMove = useCallback(async () => {
-		if (currentPlayer !== BOT || gameState !== "playing") return;
+const makeBotMove = useCallback(async () => {
+    if (gameState !== "playing") return;
 
-		setMetrics((prev) => ({ ...prev, isThinking: true, nodesSearched: 0 }));
+    // Mode 1: manusia vs bot
+    if (config.mode === "human-vs-bot") {
+        if (currentPlayer !== BOT) return;
 
-		// Simulate thinking with delay
-		await new Promise((resolve) => setTimeout(resolve, 50));
+        setMetrics((prev) => ({ ...prev, isThinking: true, nodesSearched: 0 }));
+        await new Promise((resolve) => setTimeout(resolve, 50));
 
-		const startTime = performance.now();
-		const { col, evaluation, nodes } = findBestMove(
-			board,
-			config.algorithm,
-			config.searchDepth
-		);
-		const endTime = performance.now();
+        const startTime = performance.now();
+        const { col, evaluation, nodes } = findBestMove(
+            board,
+            config.algorithm,
+            config.searchDepth,
+            BOT
+        );
+        const endTime = performance.now();
+        const thinkTime = endTime - startTime;
 
-		const thinkTime = endTime - startTime;
+        setMetrics({
+            nodesSearched: nodes,
+            timeMs: thinkTime,
+            evaluation,
+            isThinking: true,
+        });
 
-		setMetrics({
-			nodesSearched: nodes,
-			timeMs: thinkTime,
-			evaluation,
-			isThinking: true,
-		});
+        const newBoard = makeMove(board, col, BOT);
+        setBoard(newBoard);
+        setMetrics((prev) => ({ ...prev, isThinking: false }));
 
-		const newBoard = makeMove(board, col, BOT);
-		setBoard(newBoard);
-		setMetrics((prev) => ({
-			...prev,
-			isThinking: false,
-		}));
+        const winner = checkWinner(newBoard);
+        if (winner) {
+            setWinner(winner);
+            setGameState("finished");
+            return;
+        }
 
-		const winner = checkWinner(newBoard);
-		if (winner) {
-			setWinner(winner);
-			setGameState("finished");
+        if (isBoardFull(newBoard)) {
+            setGameState("finished");
+            return;
+        }
 
-			return;
-		}
+        setCurrentPlayer(PLAYER);
+        return;
+    }
 
-		if (isBoardFull(newBoard)) {
-			setGameState("finished");
+	// Mode 2: bot vs bot
+	const botPlayer: 1 | 2 = currentPlayer;
+	const botAlgorithm =
+		botPlayer === PLAYER ? config.bot1Algorithm : config.bot2Algorithm;
+	const botDepth =
+		botPlayer === PLAYER ? config.bot1Depth : config.bot2Depth;
 
-			return;
-		}
+	setMetrics((prev) => ({ ...prev, isThinking: true, nodesSearched: 0 }));
+	await new Promise((resolve) => setTimeout(resolve, 50));
 
-		setCurrentPlayer(PLAYER);
-	}, [currentPlayer, gameState, board, config]);
+	const startTime = performance.now();
+	const { col, evaluation, nodes } = findBestMove(
+		board,
+		botAlgorithm,
+		botDepth,     //  pakai depth per bot
+		botPlayer
+	);
+
+    const endTime = performance.now();
+    const thinkTime = endTime - startTime;
+
+    setMetrics({
+        nodesSearched: nodes,
+        timeMs: thinkTime,
+        evaluation,
+        isThinking: true,
+    });
+
+    const newBoard = makeMove(board, col, botPlayer);
+    setBoard(newBoard);
+    setMetrics((prev) => ({ ...prev, isThinking: false }));
+
+    const winner = checkWinner(newBoard);
+    if (winner) {
+        setWinner(winner);
+        setGameState("finished");
+        return;
+    }
+
+    if (isBoardFull(newBoard)) {
+        setGameState("finished");
+        return;
+    }
+
+    setCurrentPlayer(botPlayer === PLAYER ? BOT : PLAYER);
+}, [board, config, currentPlayer, gameState]);
 
 	// ========================================================================
 	// GAME LIFECYCLE EFFECTS
 	// ========================================================================
 
 	useEffect(() => {
-		if (currentPlayer === BOT && gameState === "playing") {
+		if (gameState !== "playing") return;
+
+		if (config.mode === "human-vs-bot") {
+			if (currentPlayer === BOT) {
+				makeBotMove();
+			}
+		} else {
+			// bot vs bot: setiap giliran, always bot
 			makeBotMove();
 		}
-	}, [currentPlayer, gameState, makeBotMove]);
+	}, [config.mode, currentPlayer, gameState, makeBotMove]);
+
+
 
 	// ========================================================================
 	// GAME STATE INITIALIZATION
@@ -872,208 +946,331 @@ export default function App(): JSX.Element {
 		transpositionTable.clear();
 	};
 
-	// ========================================================================
-	// RENDER: SETUP SCREEN
-	// ========================================================================
+// ========================================================================
+// RENDER: SETUP SCREEN
+// ========================================================================
 
-	if (gameState === "setup") {
-		return (
-			<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4 sm:p-8">
-				<div className="bg-white rounded-2xl shadow-2xl px-4 py-8 sm:p-8 max-w-5xl w-full">
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-						{/* Left Column: Game Configuration */}
-						<div className="space-y-5">
-							<h2 className="text-2xl font-bold text-slate-800 mb-6">
-								Connect 4 AI Game
-							</h2>
+if (gameState === "setup") {
+	return (
+		<div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4 sm:p-8">
+			<div className="bg-white rounded-2xl shadow-2xl px-4 py-8 sm:p-8 max-w-5xl w-full">
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+					{/* Left Column: Game Configuration */}
+					<div className="space-y-5">
+						<h2 className="text-2xl font-bold text-slate-800 mb-6">
+							Connect 4 AI Game
+						</h2>
 
-							{/* Algorithm Selection */}
-							<div>
-								<label className="block text-sm font-medium text-slate-700 mb-2">
-									AI Algorithm
-								</label>
+						{/* Game Mode */}
+						<div>
+							<label className="block text-sm font-medium text-slate-700 mb-2">
+								Game Mode
+							</label>
 
-								<select
-									value={config.algorithm}
-									onChange={(e) =>
-										setConfig({
-											...config,
-											algorithm: e.target
-												.value as Algorithm,
-										})
+							<div className="flex gap-4">
+								<button
+									onClick={() =>
+										setConfig({ ...config, mode: "human-vs-bot" })
 									}
-									className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+										config.mode === "human-vs-bot"
+											? "bg-blue-500 text-white"
+											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+									}`}
 								>
-									<option value="alphabeta">
-										Alpha-Beta Pruning
-									</option>
+									Human vs Bot
+								</button>
 
-									<option value="transposition">
-										Transposition Table
-									</option>
-
-									<option value="mtdf">MTD(f)</option>
-								</select>
-							</div>
-
-							{/* Search Depth Selection */}
-							<div>
-								<label className="block text-sm font-medium text-slate-700 mb-2">
-									Search Depth: {config.searchDepth}
-								</label>
-
-								<input
-									type="range"
-									min="1"
-									max="10"
-									value={config.searchDepth}
-									onChange={(e) =>
-										setConfig({
-											...config,
-											searchDepth: Number(e.target.value),
-										})
+								<button
+									onClick={() =>
+										setConfig({ ...config, mode: "bot-vs-bot" })
 									}
-									className="w-full"
-								/>
-
-								<div className="flex justify-between text-xs text-slate-500 mt-1">
-									<span>1 (Easy)</span>
-
-									<span>10 (Hard)</span>
-								</div>
+									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+										config.mode === "bot-vs-bot"
+											? "bg-purple-500 text-white"
+											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+									}`}
+								>
+									Bot vs Bot
+								</button>
 							</div>
-
-							{/* Player Start Selection */}
-							<div>
-								<label className="block text-sm font-medium text-slate-700 mb-2">
-									Who Starts First?
-								</label>
-
-								<div className="flex gap-4">
-									<button
-										onClick={() =>
-											setConfig({
-												...config,
-												playerStarts: true,
-											})
-										}
-										className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-											config.playerStarts
-												? "bg-blue-500 text-white"
-												: "bg-slate-200 text-slate-700 hover:bg-slate-300"
-										}`}
-									>
-										Player
-									</button>
-
-									<button
-										onClick={() =>
-											setConfig({
-												...config,
-												playerStarts: false,
-											})
-										}
-										className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-											!config.playerStarts
-												? "bg-red-500 text-white"
-												: "bg-slate-200 text-slate-700 hover:bg-slate-300"
-										}`}
-									>
-										Bot
-									</button>
-								</div>
-							</div>
-
-							{/* Start Button */}
-							<button
-								onClick={startGame}
-								className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
-							>
-								Start Game
-							</button>
 						</div>
 
-						{/* Right Column: Project Information */}
-						<div className="space-y-5 border-slate-200 border-t-2 sm:border-t-0 sm:border-l-2 pt-8 sm:pt-0 sm:pl-8">
-							<h2 className="text-2xl font-bold text-slate-800 mb-6">
-								Project Information
-							</h2>
+						{/* =============== ALGORITHM + DEPTH SECTION (2 ROW) =============== */}
+						<div className="space-y-4">
+							{/* Row 1: Algorithm select(s) */}
+							{config.mode === "human-vs-bot" ? (
+								<div>
+									<label className="block text-sm font-medium text-slate-700 mb-2">
+										Bot Algorithm
+									</label>
 
-							{/* Title */}
-							<div>
-								<h3 className="font-bold text-slate-800 text-sm">
-									Title
-								</h3>
+									<select
+										value={config.algorithm}
+										onChange={(e) =>
+											setConfig({
+												...config,
+												algorithm: e.target.value as Algorithm,
+											})
+										}
+										className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									>
+										<option value="alphabeta">Alpha-Beta Pruning</option>
+										<option value="transposition">Transposition Table</option>
+										<option value="mtdf">MTD(f)</option>
+									</select>
+								</div>
+							) : (
+								<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+									{/* Bot 1 Algorithm */}
+									<div>
+										<label className="block text-sm font-medium text-slate-700 mb-2">
+											Bot Algorithm 1 (Player 1)
+										</label>
 
-								<p className="text-slate-600 text-sm leading-relaxed text-justify">
-									Implementation and Comparative Study of
-									Alpha-Beta Pruning, Transposition Tables,
-									and MTD(F) for Minimax Algorithm in a
-									Two-Player Connect Four Game
-								</p>
-							</div>
+										<select
+											value={config.bot1Algorithm}
+											onChange={(e) =>
+												setConfig({
+													...config,
+													bot1Algorithm: e.target.value as Algorithm,
+												})
+											}
+											className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										>
+											<option value="alphabeta">Alpha-Beta Pruning</option>
+											<option value="transposition">Transposition Table</option>
+											<option value="mtdf">MTD(f)</option>
+										</select>
+									</div>
 
-							{/* Course */}
-							<div>
-								<h3 className="font-bold text-slate-800 text-sm">
-									Course
-								</h3>
+									{/* Bot 2 Algorithm */}
+									<div>
+										<label className="block text-sm font-medium text-slate-700 mb-2">
+											Bot Algorithm 2 (Player 2)
+										</label>
 
-								<p className="text-slate-600 text-sm">
-									Introduction to Artificial Intelligence -
-									Class A
-								</p>
-							</div>
+										<select
+											value={config.bot2Algorithm}
+											onChange={(e) =>
+												setConfig({
+													...config,
+													bot2Algorithm: e.target.value as Algorithm,
+												})
+											}
+											className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										>
+											<option value="alphabeta">Alpha-Beta Pruning</option>
+											<option value="transposition">Transposition Table</option>
+											<option value="mtdf">MTD(f)</option>
+										</select>
+									</div>
+								</div>
+							)}
 
-							{/* Lecturer */}
-							<div>
-								<h3 className="font-bold text-slate-800 text-sm">
-									Lecturer
-								</h3>
+							{/* Row 2: Depth slider(s) */}
+							{config.mode === "human-vs-bot" ? (
+								<div>
+									<label className="block text-sm font-medium text-slate-700 mb-2">
+										Search Depth: {config.searchDepth}
+									</label>
 
-								<p className="text-slate-600 text-sm">
-									Bima Prihasto, S.Si., M.Si., Ph.D.
-								</p>
-							</div>
+									<input
+										type="range"
+										min="1"
+										max="10"
+										value={config.searchDepth}
+										onChange={(e) =>
+											setConfig({
+												...config,
+												searchDepth: Number(e.target.value),
+											})
+										}
+										className="w-full"
+									/>
 
-							{/* Members */}
-							<div>
-								<h3 className="font-bold text-slate-800 text-sm">
-									Group 8 Members
-								</h3>
+									<div className="flex justify-between text-xs text-slate-500 mt-1">
+										<span>1 (Easy)</span>
+										<span>10 (Hard)</span>
+									</div>
+								</div>
+							) : (
+								<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+									{/* Bot 1 Depth */}
+									<div>
+										<label className="block text-sm font-medium text-slate-700 mb-2">
+											Search Depth: {config.bot1Depth}
+										</label>
+										<input
+											type="range"
+											min="1"
+											max="10"
+											value={config.bot1Depth}
+											onChange={(e) =>
+												setConfig({
+													...config,
+													bot1Depth: Number(e.target.value),
+												})
+											}
+											className="w-full"
+										/>
+										<div className="flex justify-between text-xs text-slate-500 mt-1">
+											<span>1 (Easy)</span>
+											<span>10 (Hard)</span>
+										</div>
+									</div>
 
-								<ul className="text-slate-600 ml-4 space-y-1 text-sm list-disc">
-									<li>
-										11231001 - Abdullah Adiwarman Wildan
-									</li>
+									{/* Bot 2 Depth */}
+									<div>
+										<label className="block text-sm font-medium text-slate-700 mb-2">
+											Search Depth: {config.bot2Depth}
+										</label>
+										<input
+											type="range"
+											min="1"
+											max="10"
+											value={config.bot2Depth}
+											onChange={(e) =>
+												setConfig({
+													...config,
+													bot2Depth: Number(e.target.value),
+												})
+											}
+											className="w-full"
+										/>
+										<div className="flex justify-between text-xs text-slate-500 mt-1">
+											<span>1 (Easy)</span>
+											<span>10 (Hard)</span>
+										</div>
+									</div>
+								</div>
+							)}
+						</div>
 
-									<li>11231015 - Bagus Nur Ardiansyah</li>
+						{/* Who Starts First? */}
+						<div>
+							<label className="block text-sm font-medium text-slate-700 mb-2">
+								Who Starts First?
+							</label>
 
-									<li>11231089 - Rizky Irswanda Ramadhana</li>
-
-									<li>11231092 - Zakaria Fattawari</li>
-
-									<li>11241041 - Lisa Sapitri</li>
-								</ul>
-							</div>
-
-							{/* GitHub Repository */}
-							<div>
-								<a
-									href="https://github.com/NotHydra/connect-4-game"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-sm"
+							<div className="flex gap-4">
+								<button
+									onClick={() =>
+										setConfig({ ...config, playerStarts: true })
+									}
+									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+										config.playerStarts
+											? "bg-blue-500 text-white"
+											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+									}`}
 								>
-									<span>🔗 GitHub Repository</span>
-								</a>
+									{config.mode === "bot-vs-bot" ? "Bot 1" : "Player"}
+								</button>
+
+								<button
+									onClick={() =>
+										setConfig({ ...config, playerStarts: false })
+									}
+									className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+										!config.playerStarts
+											? "bg-red-500 text-white"
+											: "bg-slate-200 text-slate-700 hover:bg-slate-300"
+									}`}
+								>
+									{config.mode === "bot-vs-bot" ? "Bot 2" : "Bot"}
+								</button>
 							</div>
+						</div>
+
+						{/* Start Button */}
+						<button
+							onClick={startGame}
+							className="w-full bg-linear-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
+						>
+							Start Game
+						</button>
+					</div>
+
+					{/* Right Column: Project Information (ASLI – TIDAK DIUBAH) */}
+					<div className="space-y-5 border-slate-200 border-t-2 sm:border-t-0 sm:border-l-2 pt-8 sm:pt-0 sm:pl-8">
+						<h2 className="text-2xl font-bold text-slate-800 mb-6">
+							Project Information
+						</h2>
+
+						{/* Title */}
+						<div>
+							<h3 className="font-bold text-slate-800 text-sm">
+								Title
+							</h3>
+
+							<p className="text-slate-600 text-sm leading-relaxed text-justify">
+								Implementation and Comparative Study of
+								Alpha-Beta Pruning, Transposition Tables, and
+								MTD(F) for Minimax Algorithm in a Two-Player
+								Connect Four Game
+							</p>
+						</div>
+
+						{/* Course */}
+						<div>
+							<h3 className="font-bold text-slate-800 text-sm">
+								Course
+							</h3>
+
+							<p className="text-slate-600 text-sm">
+								Introduction to Artificial Intelligence - Class
+								A
+							</p>
+						</div>
+
+						{/* Lecturer */}
+						<div>
+							<h3 className="font-bold text-slate-800 text-sm">
+								Lecturer
+							</h3>
+
+							<p className="text-slate-600 text-sm">
+								Bima Prihasto, S.Si., M.Si., Ph.D.
+							</p>
+						</div>
+
+						{/* Members */}
+						<div>
+							<h3 className="font-bold text-slate-800 text-sm">
+								Group 8 Members
+							</h3>
+
+							<ul className="text-slate-600 ml-4 space-y-1 text-sm list-disc">
+								<li>11231001 - Abdullah Adiwarman Wildan</li>
+
+								<li>11231015 - Bagus Nur Ardiansyah</li>
+
+								<li>11231089 - Rizky Irswanda Ramadhana</li>
+
+								<li>11231092 - Zakaria Fattawari</li>
+
+								<li>11241041 - Lisa Sapitri</li>
+							</ul>
+						</div>
+
+						{/* GitHub Repository */}
+						<div>
+							<a
+								href="https://github.com/NotHydra/connect-4-game"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-sm"
+							>
+								<span>🔗 GitHub Repository</span>
+							</a>
 						</div>
 					</div>
 				</div>
 			</div>
-		);
-	}
+		</div>
+	);
+}
+
 
 	// ========================================================================
 	// RENDER: GAME PLAYING SCREEN
@@ -1088,23 +1285,53 @@ export default function App(): JSX.Element {
 						Connect 4
 					</h1>
 
-					<p className="text-slate-300">
-						Algorithm:{" "}
-						<span className="font-semibold">
-							{config.algorithm === "alphabeta"
-								? "Alpha-Beta Pruning"
-								: config.algorithm === "transposition"
-								? "Transposition Table"
-								: "MTD(f)"}
-						</span>
-					</p>
+					{config.mode === "human-vs-bot" ? (
+						<>
+							<p className="text-slate-300">
+								Algorithm:{" "}
+								<span className="font-semibold">
+									{config.algorithm === "alphabeta"
+										? "Alpha-Beta Pruning"
+										: config.algorithm === "transposition"
+										? "Transposition Table"
+										: "MTD(f)"}
+								</span>
+							</p>
 
-					<p className="text-slate-300">
-						Depth:{" "}
-						<span className="font-semibold">
-							{config.searchDepth}
-						</span>
-					</p>
+							<p className="text-slate-300">
+								Depth:{" "}
+								<span className="font-semibold">
+									{config.searchDepth}
+								</span>
+							</p>
+						</>
+					) : (
+						<>
+							<p className="text-slate-300">
+								<span className="font-semibold">Bot 1 (Player 1): </span>
+								{config.bot1Algorithm === "alphabeta"
+									? "Alpha-Beta Pruning"
+									: config.bot1Algorithm === "transposition"
+									? "Transposition Table"
+									: "MTD(f)"}{" "}
+								<span className="font-semibold">
+									(Depth {config.bot1Depth})
+								</span>
+							</p>
+
+							<p className="text-slate-300">
+								<span className="font-semibold">Bot 2 (Player 2): </span>
+								{config.bot2Algorithm === "alphabeta"
+									? "Alpha-Beta Pruning"
+									: config.bot2Algorithm === "transposition"
+									? "Transposition Table"
+									: "MTD(f)"}{" "}
+								<span className="font-semibold">
+									(Depth {config.bot2Depth})
+								</span>
+							</p>
+						</>
+					)}
 				</div>
 
 				{/* Game Status Messages */}
@@ -1116,7 +1343,13 @@ export default function App(): JSX.Element {
 								: "bg-red-500 text-white"
 						}`}
 					>
-						{winner === PLAYER ? "🎉 You Win!" : "🤖 Bot Wins!"}
+						{config.mode === "human-vs-bot" ? (
+							winner === PLAYER ? "🎉 You Win!" : "🤖 Bot Wins!"
+						) : winner === PLAYER ? (
+							"🤖 Bot 1 Wins!"
+						) : (
+							"🤖 Bot 2 Wins!"
+						)}
 					</div>
 				)}
 
@@ -1139,6 +1372,7 @@ export default function App(): JSX.Element {
 											key={`${r}-${c}`}
 											onClick={() => handlePlayerMove(c)}
 											disabled={
+												config.mode === "bot-vs-bot" ||
 												currentPlayer !== PLAYER ||
 												gameState === "finished"
 											}
@@ -1149,6 +1383,7 @@ export default function App(): JSX.Element {
 													? "bg-blue-400 shadow-inner"
 													: "bg-red-400 shadow-inner"
 											} ${
+												config.mode === "bot-vs-bot" ||
 												currentPlayer !== PLAYER ||
 												gameState === "finished"
 													? "cursor-not-allowed"
@@ -1231,9 +1466,15 @@ export default function App(): JSX.Element {
 										: "bg-red-100 text-red-700"
 								}`}
 							>
-								{currentPlayer === PLAYER
-									? "🎮 Your Turn"
-									: "🤖 Bot's Turn"}
+								{config.mode === "human-vs-bot" ? (
+									currentPlayer === PLAYER
+										? "🎮 Your Turn"
+										: "🤖 Bot's Turn"
+								) : currentPlayer === PLAYER ? (
+									"🤖 Bot 1's Turn"
+								) : (
+									"🤖 Bot 2's Turn"
+								)}
 							</div>
 						</div>
 
