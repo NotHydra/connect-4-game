@@ -32,6 +32,16 @@ interface PerformanceMetrics {
 	isThinking: boolean;
 }
 
+interface BotVsBotMetrics {
+	bot1AvgTime: number;
+	bot2AvgTime: number;
+	bot1TotalNodes: number;
+	bot2TotalNodes: number;
+	bot1MoveCount: number;
+	bot2MoveCount: number;
+	result: "bot1" | "bot2" | "draw";
+}
+
 // ============================================================================
 // GAME CONSTANTS
 // ============================================================================
@@ -85,6 +95,10 @@ export default function App(): JSX.Element {
 		evaluation: 0,
 		isThinking: false,
 	});
+
+	const [botVsBotMetrics, setBotVsBotMetrics] = useState<BotVsBotMetrics | null>(null);
+	const [bot1Stats, setBot1Stats] = useState({ totalTime: 0, totalNodes: 0, moveCount: 0 });
+	const [bot2Stats, setBot2Stats] = useState({ totalTime: 0, totalNodes: 0, moveCount: 0 });
 
 	// ========================================================================
 	// BOARD STATE HELPERS
@@ -860,7 +874,7 @@ const makeBotMove = useCallback(async () => {
 	const { col, evaluation, nodes } = findBestMove(
 		board,
 		botAlgorithm,
-		botDepth,     //  pakai depth per bot
+		botDepth,
 		botPlayer
 	);
 
@@ -874,6 +888,21 @@ const makeBotMove = useCallback(async () => {
         isThinking: true,
     });
 
+	// Update stats bot vs bot
+	if (botPlayer === PLAYER) {
+		setBot1Stats(prev => ({
+			totalTime: prev.totalTime + thinkTime,
+			totalNodes: prev.totalNodes + nodes,
+			moveCount: prev.moveCount + 1
+		}));
+	} else {
+		setBot2Stats(prev => ({
+			totalTime: prev.totalTime + thinkTime,
+			totalNodes: prev.totalNodes + nodes,
+			moveCount: prev.moveCount + 1
+		}));
+	}
+
     const newBoard = makeMove(board, col, botPlayer);
     setBoard(newBoard);
     setMetrics((prev) => ({ ...prev, isThinking: false }));
@@ -882,11 +911,33 @@ const makeBotMove = useCallback(async () => {
     if (winner) {
         setWinner(winner);
         setGameState("finished");
+
+		// Save metrics
+		setBotVsBotMetrics({
+			bot1AvgTime: bot1Stats.totalTime / Math.max(bot1Stats.moveCount, 1),
+			bot2AvgTime: bot2Stats.totalTime / Math.max(bot2Stats.moveCount, 1),
+			bot1TotalNodes: bot1Stats.totalNodes,
+			bot2TotalNodes: bot2Stats.totalNodes,
+			bot1MoveCount: bot1Stats.moveCount,
+			bot2MoveCount: bot2Stats.moveCount,
+			result: winner === PLAYER ? "bot1" : "bot2"
+		});
         return;
     }
 
     if (isBoardFull(newBoard)) {
         setGameState("finished");
+
+		// Save metrics
+		setBotVsBotMetrics({
+			bot1AvgTime: bot1Stats.totalTime / Math.max(bot1Stats.moveCount, 1),
+			bot2AvgTime: bot2Stats.totalTime / Math.max(bot2Stats.moveCount, 1),
+			bot1TotalNodes: bot1Stats.totalNodes,
+			bot2TotalNodes: bot2Stats.totalNodes,
+			bot1MoveCount: bot1Stats.moveCount,
+			bot2MoveCount: bot2Stats.moveCount,
+			result: "draw"
+		});
         return;
     }
 
@@ -928,6 +979,11 @@ const makeBotMove = useCallback(async () => {
 			evaluation: 0,
 			isThinking: false,
 		});
+
+		// Reset bot vs bot metrics
+		setBot1Stats({ totalTime: 0, totalNodes: 0, moveCount: 0 });
+		setBot2Stats({ totalTime: 0, totalNodes: 0, moveCount: 0 });
+		setBotVsBotMetrics(null);
 
 		transpositionTable.clear();
 	};
@@ -1399,8 +1455,9 @@ if (gameState === "setup") {
 					{/* ============================================================== */}
 					{/* RIGHT: PERFORMANCE METRICS & TURN INDICATOR */}
 					{/* ============================================================== */}
-					<div className="space-y-4">
-						{/* Performance Metrics Card */}
+				<div className="space-y-4">
+					{/* Performance Metrics Card */}
+					{config.mode === "human-vs-bot" ? (
 						<div className="bg-white rounded-xl shadow-lg p-6">
 							<h2 className="text-xl font-bold text-slate-800 mb-4">
 								Performance Metrics
@@ -1452,9 +1509,146 @@ if (gameState === "setup") {
 								</div>
 							</div>
 						</div>
-
-						{/* Current Turn Card */}
+					) : !botVsBotMetrics ? (
 						<div className="bg-white rounded-xl shadow-lg p-6">
+							<h2 className="text-xl font-bold text-slate-800 mb-4">
+								Performance Metrics
+							</h2>
+
+							{/* Bot Thinking Indicator */}
+							{metrics.isThinking && (
+								<div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+									<div className="flex items-center gap-2">
+										<div className="animate-spin h-4 w-4 border-2 border-yellow-500 border-t-transparent rounded-full" />
+
+										<span className="text-sm font-medium text-yellow-700">
+											Bots are thinking...
+										</span>
+									</div>
+								</div>
+							)}
+
+							{/* Metrics Display */}
+							<div className="space-y-3">
+								<div className="p-3 bg-slate-50 rounded-lg">
+									<div className="text-sm text-slate-600">
+										Nodes Searched
+									</div>
+
+									<div className="text-2xl font-bold text-slate-800">
+										{metrics.nodesSearched.toLocaleString()}
+									</div>
+								</div>
+
+								<div className="p-3 bg-slate-50 rounded-lg">
+									<div className="text-sm text-slate-600">
+										Time Taken
+									</div>
+
+									<div className="text-2xl font-bold text-slate-800">
+										{metrics.timeMs.toFixed(0)}ms
+									</div>
+								</div>
+
+								<div className="p-3 bg-slate-50 rounded-lg">
+									<div className="text-sm text-slate-600">
+										Evaluation Score
+									</div>
+
+									<div className="text-2xl font-bold text-slate-800">
+										{metrics.evaluation}
+									</div>
+								</div>
+							</div>
+						</div>
+					) : (
+						<div className="bg-white rounded-xl shadow-lg p-6">
+							<h2 className="text-lg font-bold text-slate-800 mb-3">
+								Bot vs Bot Metrics
+							</h2>
+							<div className="overflow-x-auto">
+								<table className="w-full text-xs">
+									<thead>
+										<tr className="border-b border-slate-200">
+											<th className="text-left py-1.5 px-1 text-slate-700 font-semibold text-xs">Bot</th>
+											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Avg Time (ms)</th>
+											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Total Nodes</th>
+											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Speed %</th>
+											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Nodes %</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr className="border-b border-slate-100">
+											<td className="py-1.5 px-1 text-slate-800 font-medium text-xs">Bot 1</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{botVsBotMetrics.bot1AvgTime.toFixed(2)}
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{botVsBotMetrics.bot1TotalNodes.toLocaleString()}
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{(
+													(botVsBotMetrics.bot1AvgTime /
+														(botVsBotMetrics.bot1AvgTime + botVsBotMetrics.bot2AvgTime)) *
+													100
+												).toFixed(2)}%
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{(
+													(botVsBotMetrics.bot1TotalNodes /
+														(botVsBotMetrics.bot1TotalNodes + botVsBotMetrics.bot2TotalNodes)) *
+													100
+												).toFixed(2)}%
+											</td>
+										</tr>
+										<tr>
+											<td className="py-1.5 px-1 text-slate-800 font-medium text-xs">Bot 2</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{botVsBotMetrics.bot2AvgTime.toFixed(2)}
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{botVsBotMetrics.bot2TotalNodes.toLocaleString()}
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{(
+													(botVsBotMetrics.bot2AvgTime /
+														(botVsBotMetrics.bot1AvgTime + botVsBotMetrics.bot2AvgTime)) *
+													100
+												).toFixed(2)}%
+											</td>
+											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+												{(
+													(botVsBotMetrics.bot2TotalNodes /
+														(botVsBotMetrics.bot1TotalNodes + botVsBotMetrics.bot2TotalNodes)) *
+													100
+												).toFixed(2)}%
+											</td>
+										</tr>
+									</tbody>
+								</table>
+								<div className="mt-2 pt-2 border-t border-slate-200">
+									<div className="text-xs text-slate-700 font-semibold">
+										Result:
+										<span className={
+											botVsBotMetrics.result === "bot1"
+												? "ml-2 text-blue-600"
+												: botVsBotMetrics.result === "bot2"
+												? "ml-2 text-red-600"
+												: "ml-2 text-yellow-600"
+										}>
+											{botVsBotMetrics.result === "bot1"
+												? "Bot 1 Win"
+												: botVsBotMetrics.result === "bot2"
+												? "Bot 2 Win"
+												: "Draw"}
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+					{/* Current Turn Card */}
+					<div className="bg-white rounded-xl shadow-lg p-6">
 							<h2 className="text-xl font-bold text-slate-800 mb-2">
 								Current Turn
 							</h2>
@@ -1478,18 +1672,18 @@ if (gameState === "setup") {
 							</div>
 						</div>
 
-						{/* New Game Card */}
-						<div className="bg-white rounded-xl shadow-lg p-6">
-							<button
-								onClick={restartGame}
-								className="p-4 rounded-lg text-center font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition w-full cursor-pointer"
-							>
-								New Game
-							</button>
-						</div>
+					{/* New Game Card */}
+					<div className="bg-white rounded-xl shadow-lg p-6">
+						<button
+							onClick={restartGame}
+							className="p-4 rounded-lg text-center font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition w-full cursor-pointer"
+						>
+							New Game
+						</button>
 					</div>
 				</div>
 			</div>
 		</div>
+	</div>
 	);
 }
