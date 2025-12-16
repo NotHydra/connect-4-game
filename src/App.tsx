@@ -1572,56 +1572,50 @@ if (gameState === "setup") {
 										<tr className="border-b border-slate-200">
 											<th className="text-left py-1.5 px-1 text-slate-700 font-semibold text-xs">Bot</th>
 											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Avg Time (ms)</th>
+                                            <th className={[
+                                                'text-right py-1.5 px-1 font-semibold text-xs',
+                                                (botVsBotMetrics.bot1AvgTime < botVsBotMetrics.bot2AvgTime) ? 'text-blue-600' : 'text-red-600',
+                                            ].join(' ')}>Speed %</th>
 											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Total Nodes</th>
-											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Speed %</th>
-											<th className="text-right py-1.5 px-1 text-slate-700 font-semibold text-xs">Nodes %</th>
+											<th className={[
+                                                'text-right py-1.5 px-1 font-semibold text-xs',
+                                                (botVsBotMetrics.bot1TotalNodes < botVsBotMetrics.bot2TotalNodes) ? 'text-blue-600' : 'text-red-600',
+                                            ].join(' ')}>Nodes %</th>
 										</tr>
 									</thead>
 									<tbody>
-										<tr className="border-b border-slate-100">
-											<td className="py-1.5 px-1 text-slate-800 font-medium text-xs">Bot 1</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{botVsBotMetrics.bot1AvgTime.toFixed(2)}
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{botVsBotMetrics.bot1TotalNodes.toLocaleString()}
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{(
-													(botVsBotMetrics.bot1AvgTime /
-														(botVsBotMetrics.bot1AvgTime + botVsBotMetrics.bot2AvgTime)) *
-													100
-												).toFixed(2)}%
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{(
-													(botVsBotMetrics.bot1TotalNodes /
-														(botVsBotMetrics.bot1TotalNodes + botVsBotMetrics.bot2TotalNodes)) *
-													100
-												).toFixed(2)}%
-											</td>
-										</tr>
-										<tr>
-											<td className="py-1.5 px-1 text-slate-800 font-medium text-xs">Bot 2</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{botVsBotMetrics.bot2AvgTime.toFixed(2)}
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{botVsBotMetrics.bot2TotalNodes.toLocaleString()}
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{(
-													(botVsBotMetrics.bot2AvgTime /
-														(botVsBotMetrics.bot1AvgTime + botVsBotMetrics.bot2AvgTime)) *
-													100
-												).toFixed(2)}%
-											</td>
-											<td className="text-right py-1.5 px-1 text-slate-600 text-xs">
-												{(
-													(botVsBotMetrics.bot2TotalNodes /
-														(botVsBotMetrics.bot1TotalNodes + botVsBotMetrics.bot2TotalNodes)) *
-													100
-												).toFixed(2)}%
+                                    <tr className="border-b border-slate-100">
+                                        <td className="py-1.5 px-1 text-blue-600 font-medium text-xs">Bot 1</td>
+                                        <td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+                                            { botVsBotMetrics.bot1AvgTime.toFixed(2) }
+                                        </td>
+                                        <td
+                                            className="text-right py-1.5 px-1 text-slate-600 text-xs"
+                                            rowSpan="2"
+                                        >
+                                            { (
+                                                (botVsBotMetrics.bot1AvgTime / botVsBotMetrics.bot2AvgTime - 1) * 100
+                                            ).toFixed(2) }%
+                                        </td>
+                                        <td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+                                            { botVsBotMetrics.bot1TotalNodes.toLocaleString() }
+                                        </td>
+                                        <td
+                                            className="text-right py-1.5 px-1 text-slate-600 text-xs"
+                                            rowSpan="2"
+                                        >
+                                            { (
+                                                (botVsBotMetrics.bot1TotalNodes / botVsBotMetrics.bot2TotalNodes - 1) * 100
+                                            ).toFixed(2) }%
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td className="py-1.5 px-1 text-red-600 font-medium text-xs">Bot 2</td>
+                                        <td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+                                            { botVsBotMetrics.bot2AvgTime.toFixed(2) }
+                                        </td>
+                                        <td className="text-right py-1.5 px-1 text-slate-600 text-xs">
+                                            { botVsBotMetrics.bot2TotalNodes.toLocaleString()}
 											</td>
 										</tr>
 									</tbody>
