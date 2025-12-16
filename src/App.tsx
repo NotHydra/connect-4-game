@@ -1591,7 +1591,7 @@ if (gameState === "setup") {
                                         </td>
                                         <td
                                             className="text-right py-1.5 px-1 text-slate-600 text-xs"
-                                            rowSpan="2"
+                                            rowSpan={2}
                                         >
                                             { (
                                                 (botVsBotMetrics.bot1AvgTime / botVsBotMetrics.bot2AvgTime - 1) * 100
@@ -1602,7 +1602,7 @@ if (gameState === "setup") {
                                         </td>
                                         <td
                                             className="text-right py-1.5 px-1 text-slate-600 text-xs"
-                                            rowSpan="2"
+                                            rowSpan={2}
                                         >
                                             { (
                                                 (botVsBotMetrics.bot1TotalNodes / botVsBotMetrics.bot2TotalNodes - 1) * 100
