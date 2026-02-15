@@ -1,7 +1,7 @@
 # Connect 4 Game
 
 <p style="text-align: justify">
-    <b>Connect 4 Game</b> is an interactive implementation of the classic Connect 4 board game. Built with modern web technologies, this project showcases a responsive and engaging user experience. Whether you're here to play a round, explore the codebase, or use it as a reference for building games with React, we hope you enjoy your experience.
+    <b>Connect 4 Game</b> is an interactive implementation of the classic Connect 4 board game. This project serves as the final project for a university course called "Introduction to AI". Built with modern web technologies, this project showcases a responsive and engaging user experience. Whether you're here to play a round, explore the codebase, or use it as a reference for building games with React, we hope you enjoy your experience.
 </p>
 
 ## Tech Stack
